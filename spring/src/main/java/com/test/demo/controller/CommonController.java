@@ -9,10 +9,10 @@ import java.util.Map;
 
 
 @RestController()
-@RequestMapping(value = "")
+@RequestMapping(value = "1")
 public class CommonController {
 
-    @RequestMapping(value = "", method = RequestMethod.GET)
+    @RequestMapping(value = "index", method = RequestMethod.GET)
     public Object index() {
         return "only a test";
     }

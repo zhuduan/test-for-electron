@@ -135,7 +135,7 @@ app.on('will-quit', () => {
     const kill = require('tree-kill');
     kill(serverProcess.pid, 'SIGTERM', function (err) {
       logger.info('Server process killed');
-        serverProcess = null;
+      serverProcess = null;
     });
   }
 });
