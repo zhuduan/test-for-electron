@@ -4,6 +4,8 @@ const url = require('url');
 const logger = require('electron-log');
 const getPort = require('get-port');
 const isDev = require('electron-is-dev');
+const kill = require('tree-kill');
+const sleep = require('system-sleep');
 
 const { app, BrowserWindow, dialog } = electron;
 
@@ -19,11 +21,18 @@ let serverProcess;
 function startServer(port) {
   const platform = process.platform;
 
-  const server = `${path.join(app.getAppPath(), '..', '..', JAR)}`;
+  let server = `${path.join(app.getAppPath(), '..', '..', JAR)}`;
+  let javaInJre = `${path.join(app.getAppPath(), '..', '..', 'jre/bin','java')}`;;
+
   logger.info(`Launching server with jar ${server} at port ${port}...`);
 
+  // dev will use local
+  if(isDev){
+    javaInJre = 'java';
+    server = `${path.join(app.getAppPath(), '..', '..', '..','..','..','..', '..', 'spring/target', JAR)}`
+  }
   serverProcess = require('child_process')
-    .spawn('java', [ '-jar', server, `--server.port=${port}`]);
+          .spawn(javaInJre, [ '-jar', server, `--server.port=${port}`]);
 
   serverProcess.stdout.on('data', data => {
     logger.info('SERVER: ' + data);
@@ -100,16 +109,11 @@ app.on('ready', function () {
   // Create window first to show splash before starting server
   createWindow();
 
-  if (isDev) {
-    // Assume the webpack dev server is up at port 9000  
-    loadHomePage('http://localhost');
-  } else {
-    // Start server at an available port (prefer 8080)
-    getPort({ port: 7001 }).then(port => {
-      startServer(port);
-      loadHomePage(`http://localhost:${port}`)
-    })
-  }
+  // Start server at an available port (prefer 8080)
+  getPort({ port: 7001 }).then(port => {
+    startServer(port);
+    loadHomePage(`http://localhost:${port}`)
+  })
 });
 
 // Quit when all windows are closed.
@@ -117,7 +121,7 @@ app.on('window-all-closed', function () {
   // On OS X it is common for applications and their menu bar
   // to stay active until the user quits explicitly with Cmd + Q
   if (process.platform !== 'darwin') {
-    app.quit()
+    app.quit();
   }
 });
 
@@ -126,17 +130,28 @@ app.on('activate', function () {
   // dock icon is clicked and there are no other windows open.
   if (mainWindow === null) {
     createWindow()
+
+    getPort({ port: 7001 }).then(port => {
+      startServer(port);
+      loadHomePage(`http://localhost:${port}`)
+    })
   }
 });
 
 app.on('will-quit', () => {
-  if (serverProcess) {
+  if( serverProcess !== null ) {
     logger.info(`Killing server process ${serverProcess.pid}`);
-    const kill = require('tree-kill');
     kill(serverProcess.pid, 'SIGTERM', function (err) {
       logger.info('Server process killed');
       serverProcess = null;
     });
+  }
+
+  // as in mac sometime kill not succeed immediately, should wait for seconds and re-kill it
+  while( serverProcess !== null ){
+    logger.info(`Killing again process ${serverProcess.pid}`);
+    kill(serverProcess.pid, 'SIGTERM', ()=> {serverProcess = null;});
+    sleep(1000);
   }
 });
 // In this file you can include the rest of your app's specific main process
